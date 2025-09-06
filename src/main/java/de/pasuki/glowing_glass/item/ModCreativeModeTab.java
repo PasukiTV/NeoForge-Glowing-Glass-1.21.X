@@ -5,6 +5,7 @@ import de.pasuki.glowing_glass.block.ModBlocks;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -16,7 +17,7 @@ public class ModCreativeModeTab {
 
     public static final Supplier<CreativeModeTab> GLOWING_GLASS = CREATE_MODE_TAB.register("glowing_glass_tab",
             ()-> CreativeModeTab.builder()
-                    //.icon(()-> new ItemStack(ModBlocks.WHITE_REDSTONE_LAMP.get()))
+                    .icon(()-> new ItemStack(ModBlocks.GLOWING_GLASS.get()))
                     .title(Component.translatable("creativetab.glowing_glass"))
                     .displayItems((itemDisplayParameters, output) ->{
                         output.accept(ModBlocks.GLOWING_GLASS.get());

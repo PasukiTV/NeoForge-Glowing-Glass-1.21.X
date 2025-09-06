@@ -18,7 +18,7 @@ public final class Config {
 
         LIGHT_LEVEL_PANES = b
                 .comment("Light level for Glowing Glass panes (0-15).")
-                .defineInRange("lightLevelPanes", 1, 0, 15);
+                .defineInRange("lightLevelPanes", 10, 0, 15);
 
         b.pop();
         COMMON_SPEC = b.build();

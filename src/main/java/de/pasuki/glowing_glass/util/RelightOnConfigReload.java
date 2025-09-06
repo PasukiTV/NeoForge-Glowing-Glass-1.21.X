@@ -15,13 +15,11 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
-/**
- * Re-lightet bereits platzierte Glowing-Glass-Blöcke beim Config-(Re)Load.
- * Performant: nur geladene Sicht-Chunks rund um Spieler, pro Section früher Abbruch,
- * anschließender Scan relighted nur echte Treffer.
- */
-@EventBusSubscriber(modid = GlowingGlass.MOD_ID) // bus weglassen → Default ist MOD
+@EventBusSubscriber(modid = GlowingGlass.MOD_ID) // default = MOD bus
 public final class RelightOnConfigReload {
+
+    /** Set when config changes while the server isn't available (config GUI). */
+    public static volatile boolean pendingRelight = false;
 
     @SubscribeEvent
     public static void onConfigLoad(ModConfigEvent.Loading e) {
@@ -35,19 +33,25 @@ public final class RelightOnConfigReload {
         scheduleRelightAllLevels();
     }
 
-    private static void scheduleRelightAllLevels() {
+    /** If server exists: do it now; otherwise queue for the next server tick. */
+    public static void scheduleRelightAllLevels() {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) return;
+        if (server == null) {
+            pendingRelight = true;
+            GlowingGlass.LOGGER.debug("[GlowingGlass] Relight queued until server is available.");
+            return;
+        }
 
         server.execute(() -> {
+            GlowingGlass.LOGGER.debug("[GlowingGlass] Relight running on all loaded levels.");
             for (ServerLevel level : server.getAllLevels()) {
                 relightLoadedGlowingBlocks(level);
             }
         });
     }
 
-    /** Kompatibel & flott: Sicht-Chunks → Sections mit frühem Abbruch → nur Treffer relighten. */
-    private static void relightLoadedGlowingBlocks(ServerLevel level) {
+    /** Player view chunks → sections (early-exit probe) → relight hits. */
+    public static void relightLoadedGlowingBlocks(ServerLevel level) {
         final var chunkSource = level.getChunkSource();
         final var lightEngine = chunkSource.getLightEngine();
         final int view = level.getServer().getPlayerList().getViewDistance();
@@ -62,18 +66,17 @@ public final class RelightOnConfigReload {
                     if (chunk == null) continue;
 
                     final ChunkPos cpos = chunk.getPos();
-                    final int minX = cpos.x << 4; // = getMinBlockX()
-                    final int minZ = cpos.z << 4; // = getMinBlockZ()
+                    final int minX = cpos.x << 4;
+                    final int minZ = cpos.z << 4;
 
                     LevelChunkSection[] sections = chunk.getSections();
                     for (int i = 0; i < sections.length; i++) {
                         LevelChunkSection section = sections[i];
                         if (section == null || section.hasOnlyAir()) continue;
 
-                        // secMinY aus Section-Index ableiten (16 Blöcke pro Section)
                         final int secMinY = (chunk.getSectionYFromSectionIndex(i) << 4);
 
-                        // --- 1) Früher Abbruch: prüfe, ob die Section ÜBERHAUPT einen unserer Blöcke enthält
+                        // Early-exit: section contains none of our blocks?
                         boolean sectionHasAny = false;
                         outer:
                         for (int yOff = 0; yOff < 16; yOff++) {
@@ -82,8 +85,8 @@ public final class RelightOnConfigReload {
                                 int x = minX + xOff;
                                 for (int zOff = 0; zOff < 16; zOff++) {
                                     int z = minZ + zOff;
-                                    BlockPos pos = new BlockPos(x, y, z);
-                                    if (isGlowingGlass(level.getBlockState(pos).getBlock())) {
+                                    BlockPos probe = new BlockPos(x, y, z);
+                                    if (isGlowingGlass(level.getBlockState(probe).getBlock())) {
                                         sectionHasAny = true;
                                         break outer;
                                     }
@@ -92,7 +95,7 @@ public final class RelightOnConfigReload {
                         }
                         if (!sectionHasAny) continue;
 
-                        // --- 2) Section wirklich scannen und NUR Treffer relighten
+                        // Relight only hits
                         for (int yOff = 0; yOff < 16; yOff++) {
                             int y = secMinY + yOff;
                             for (int xOff = 0; xOff < 16; xOff++) {
